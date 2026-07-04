@@ -1,0 +1,266 @@
+# AFWILTO platform — single-command startup for the shell, all MFEs,
+# all backend managers and their databases.
+#
+#   docker compose up -d
+#
+# Spec: frontend/docs/specs/10-docker-compose-platform.md
+# All cross-app URLs are browser-resolved, so every service the browser talks
+# to publishes its allocated localhost port. Databases stay network-internal.
+
+name: afwilto-platform
+
+networks:
+  afwilto:
+
+volumes:
+  theater_pgdata:
+  nc_mysql_data:
+  finance_pgdata:
+
+services:
+  # ── Frontend: Module Federation host ──────────────────────────────────────
+  shell:
+    build:
+      context: ./frontend
+      dockerfile: docker/Dockerfile.mfe
+      args:
+        APP: afwilto-shell-web-ui
+        NGINX_CONF: nginx.host.conf
+    ports:
+      - "3000:80"
+    restart: unless-stopped
+    networks: [afwilto]
+
+  # ── Frontend: remotes (each serves remoteEntry.js with CORS) ──────────────
+  afwilto-home:
+    build:
+      context: ./frontend
+      dockerfile: docker/Dockerfile.mfe
+      args: { APP: afwilto-homepage-web-ui }
+    ports:
+      - "3001:80"
+    restart: unless-stopped
+    networks: [afwilto]
+
+  slab-home:
+    build:
+      context: ./frontend
+      dockerfile: docker/Dockerfile.mfe
+      args: { APP: afwilto-slab-homepage-web-ui }
+    ports:
+      - "3002:80"
+    restart: unless-stopped
+    networks: [afwilto]
+
+  ud:
+    build:
+      context: ./frontend
+      dockerfile: docker/Dockerfile.mfe
+      args: { APP: afwilto-slab-subject-ud-web-ui }
+    ports:
+      - "3003:80"
+    restart: unless-stopped
+    networks: [afwilto]
+
+  mati:
+    build:
+      context: ./frontend
+      dockerfile: docker/Dockerfile.mfe
+      args: { APP: afwilto-slab-subject-mati-web-ui }
+    ports:
+      - "3004:80"
+    restart: unless-stopped
+    networks: [afwilto]
+
+  finance-mfe:
+    build:
+      context: ./frontend
+      dockerfile: docker/Dockerfile.mfe
+      args: { APP: afwilto-financial-status-web-ui }
+    ports:
+      - "3005:80"
+    restart: unless-stopped
+    networks: [afwilto]
+
+  certifications:
+    build:
+      context: ./frontend
+      dockerfile: docker/Dockerfile.mfe
+      args: { APP: afwilto-certifications-web-ui }
+    ports:
+      - "3006:80"
+    restart: unless-stopped
+    networks: [afwilto]
+
+  # ── Backend: stateless subject managers ────────────────────────────────────
+  cs-mngr:
+    build: ./backend/afwilto-subject-computer-science-mngr
+    ports:
+      - "8081:8081"
+    restart: unless-stopped
+    networks: [afwilto]
+
+  physics-mngr:
+    build: ./backend/afwilto-subject-physics-mngr
+    ports:
+      - "8087:8080"
+    restart: unless-stopped
+    networks: [afwilto]
+
+  or-mngr:
+    build: ./backend/afwilto-subject-operations-research-mngr
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+    ports:
+      - "8088:8080"
+    restart: unless-stopped
+    networks: [afwilto]
+
+  os-mngr:
+    build: ./backend/afwilto-subject-operative-system-mngr
+    environment:
+      RUST_LOG: info
+    ports:
+      - "8089:8080"
+    restart: unless-stopped
+    networks: [afwilto]
+
+  ai-mngr:
+    build: ./backend/afwilto-subject-artificial-intelligence-mngr
+    environment:
+      PYTHONPATH: /app/src
+    ports:
+      - "8090:8080"
+    restart: unless-stopped
+    networks: [afwilto]
+
+  programming-mngr:
+    build: ./backend/afwilto-subject-programming-mngr
+    environment:
+      QUARKUS_HTTP_PORT: "8080"
+    ports:
+      - "8091:8080"
+    restart: unless-stopped
+    networks: [afwilto]
+
+  # ── Backend: theater (Databases II) — .NET + Postgres + MailHog ───────────
+  theater-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: theater_management
+      POSTGRES_USER: ${THEATER_DB_USER:-theater_admin}
+      POSTGRES_PASSWORD: ${THEATER_DB_PASSWORD:-localdev123}
+    volumes:
+      - theater_pgdata:/var/lib/postgresql/data
+      - ./backend/afwilto-subject-data-bases-mngr/scripts/seed:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${THEATER_DB_USER:-theater_admin}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    networks: [afwilto]
+
+  theater-mngr:
+    build: ./backend/afwilto-subject-data-bases-mngr
+    environment:
+      ConnectionStrings__DefaultConnection: "Host=theater-db;Port=5432;Database=theater_management;Username=${THEATER_DB_USER:-theater_admin};Password=${THEATER_DB_PASSWORD:-localdev123}"
+      Jwt__Secret: ${JWT_SECRET:-dev-secret-change-in-production-minimum-32-chars}
+      Jwt__ExpiryMinutes: 480
+      Email__SmtpHost: mailhog
+      Email__SmtpPort: 1025
+      Email__Username: ""
+      Email__Password: ""
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+    ports:
+      - "8085:8080"
+    depends_on:
+      theater-db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks: [afwilto]
+
+  mailhog:
+    image: mailhog/mailhog
+    platform: linux/amd64
+    ports:
+      - "8025:8025"
+      - "1025:1025"
+    restart: unless-stopped
+    networks: [afwilto]
+
+  # ── Backend: network-communication (Laravel + MySQL) ──────────────────────
+  nc-db:
+    image: mysql:8
+    environment:
+      MYSQL_DATABASE: ${NC_DB_DATABASE:-network_comm}
+      MYSQL_USER: ${NC_DB_USERNAME:-app}
+      MYSQL_PASSWORD: ${NC_DB_PASSWORD:-secret}
+      MYSQL_ROOT_PASSWORD: ${NC_DB_ROOT_PASSWORD:-rootsecret}
+    volumes:
+      - nc_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    networks: [afwilto]
+
+  nc-mngr:
+    build: ./backend/afwilto-subject-network-communication-mngr
+    command: sh -c "php artisan migrate --force && php artisan serve --host=0.0.0.0 --port=8000"
+    environment:
+      DB_HOST: nc-db
+      DB_PORT: 3306
+      DB_DATABASE: ${NC_DB_DATABASE:-network_comm}
+      DB_USERNAME: ${NC_DB_USERNAME:-app}
+      DB_PASSWORD: ${NC_DB_PASSWORD:-secret}
+    ports:
+      - "8086:8000"
+    depends_on:
+      nc-db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks: [afwilto]
+
+  # ── Backend: finance (Go + Postgres) ───────────────────────────────────────
+  finance-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${FIN_DB_NAME:-findb}
+      POSTGRES_USER: ${FIN_DB_USER:-finuser}
+      POSTGRES_PASSWORD: ${FIN_DB_PASSWORD:-finpass}
+    volumes:
+      - finance_pgdata:/var/lib/postgresql/data
+      - ../personal-financial-status/afwt-financial-status-db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ../personal-financial-status/afwt-financial-status-db/migrations:/migrations:ro
+      - ../personal-financial-status/afwt-financial-status-db/seeds:/seeds:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${FIN_DB_USER:-finuser} -d ${FIN_DB_NAME:-findb}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    networks: [afwilto]
+
+  finance-api:
+    build: ../personal-financial-status/afwt-financial-status-backend
+    environment:
+      PORT: "8080"
+      DB_HOST: finance-db
+      DB_PORT: "5432"
+      DB_NAME: ${FIN_DB_NAME:-findb}
+      DB_USER: ${FIN_DB_USER:-finuser}
+      DB_PASSWORD: ${FIN_DB_PASSWORD:-finpass}
+      DB_SSL_MODE: disable
+      DEFAULT_USER_ID: ${FIN_DEFAULT_USER_ID:-ce7982df-2de4-41a9-a80e-af787ce8cfd3}
+      ALLOW_ORIGINS: "http://localhost:3000,http://localhost:3005"
+    ports:
+      - "8080:8080"
+    depends_on:
+      finance-db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks: [afwilto]

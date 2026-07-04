@@ -1,0 +1,7 @@
+.env
+.DS_Store
+memory/
+
+# nested independent git repositories
+/frontend/
+/backend/afwilto-subject-*/
