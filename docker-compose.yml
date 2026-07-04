@@ -15,7 +15,10 @@ networks:
 volumes:
   theater_pgdata:
   nc_mysql_data:
+  # Reuses the volume created by the old standalone finance stack so existing
+  # personal-finance data carries over into the platform.
   finance_pgdata:
+    name: personal-financial-status_pgdata
 
 services:
   # ── Frontend: Module Federation host ──────────────────────────────────────
@@ -206,7 +209,11 @@ services:
       timeout: 5s
       retries: 10
     restart: unless-stopped
-    networks: [afwilto]
+    networks:
+      afwilto:
+        # the Laravel image bakes DB_HOST=db in its .env; request workers read
+        # that file, so the MySQL container must also answer to "db"
+        aliases: [db]
 
   nc-mngr:
     build: ./backend/afwilto-subject-network-communication-mngr
