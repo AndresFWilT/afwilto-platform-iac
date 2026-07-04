@@ -38,6 +38,27 @@ check "os-mngr"          http://localhost:8089/ any
 check "ai-mngr"          http://localhost:8090/ any
 check "programming-mngr" http://localhost:8091/ any
 check "finance-api"      http://localhost:8080/ any
+check "certifications"   http://localhost:8082/healthz 200
 check "mailhog UI"       http://localhost:8025/ 200
+
+# Certifications round-trip: create → get → delete (GH-I1)
+CERT_API=http://localhost:8082/api/v1
+cert_id=$(curl -s -X POST "$CERT_API/certifications" \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Smoke Test Cert '"$RANDOM"'","category":"Smoke / Test"}' |
+  sed -n 's/.*"id":"\([^"]*\)".*/\1/p')
+if [[ -n "$cert_id" ]]; then
+  get_code=$(curl -s -o /dev/null -w "%{http_code}" "$CERT_API/certifications/$cert_id")
+  del_code=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE "$CERT_API/certifications/$cert_id")
+  if [[ "$get_code" == "200" && "$del_code" == "204" ]]; then
+    echo "OK   certifications round-trip (POST→GET→DELETE)"
+  else
+    echo "FAIL certifications round-trip (GET=$get_code DELETE=$del_code)"
+    FAILED=1
+  fi
+else
+  echo "FAIL certifications round-trip (create returned no id)"
+  FAILED=1
+fi
 
 exit $FAILED

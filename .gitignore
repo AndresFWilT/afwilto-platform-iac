@@ -5,3 +5,4 @@ memory/
 # nested independent git repositories
 /frontend/
 /backend/afwilto-subject-*/
+/backend/afwilto-certifications-mngr/
