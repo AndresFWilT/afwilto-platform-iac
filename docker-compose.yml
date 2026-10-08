@@ -17,6 +17,8 @@ volumes:
   nc_mysql_data:
   certifications_pgdata:
   certifications_uploads:
+  studies_pgdata:
+  love_points_pgdata:
   # Reuses the volume created by the old standalone finance stack so existing
   # personal-finance data carries over into the platform.
   finance_pgdata:
@@ -94,6 +96,16 @@ services:
       args: { APP: afwilto-certifications-web-ui }
     ports:
       - "3006:80"
+    restart: unless-stopped
+    networks: [afwilto]
+
+  love-points-bank:
+    build:
+      context: ./frontend
+      dockerfile: docker/Dockerfile.mfe
+      args: { APP: afwilto-love-points-bank-web-ui }
+    ports:
+      - "3007:80"
     restart: unless-stopped
     networks: [afwilto]
 
@@ -275,6 +287,44 @@ services:
     restart: unless-stopped
     networks: [afwilto]
 
+  # ── Backend: studies knowledge base (Go + Postgres) ───────────────────────
+  # Spec: frontend/docs/specs/16-studies.md
+  studies-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: studies
+      POSTGRES_USER: ${STUDIES_DB_USER:-studies}
+      POSTGRES_PASSWORD: ${STUDIES_DB_PASSWORD:-studies}
+    volumes:
+      - studies_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${STUDIES_DB_USER:-studies} -d studies"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    networks: [afwilto]
+
+  studies-mngr:
+    build: ./backend/afwilto-studies-mngr
+    environment:
+      PORT: "8084"
+      DATABASE_URL: postgres://${STUDIES_DB_USER:-studies}:${STUDIES_DB_PASSWORD:-studies}@studies-db:5432/studies?sslmode=disable
+      MAX_BODY_BYTES: "1048576"
+      MIGRATE_ON_START: "true"
+      ALLOW_ORIGINS: http://localhost:3000,http://localhost:3008
+    ports:
+      - "8084:8084"
+    depends_on:
+      studies-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/app/healthcheck"]
+      interval: 10s
+      retries: 6
+    restart: unless-stopped
+    networks: [afwilto]
+
   # ── Backend: finance (Go + Postgres) ───────────────────────────────────────
   finance-db:
     image: postgres:16-alpine
@@ -312,5 +362,57 @@ services:
     depends_on:
       finance-db:
         condition: service_healthy
+    restart: unless-stopped
+    networks: [afwilto]
+
+  # ── Backend: love points bank (Go + Postgres) ──────────────────────────────
+  # Spec: frontend/docs/specs/15-love-points-bank-mfe.md
+  love-points-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${LOVE_POINTS_DB_NAME:-puntitos}
+      POSTGRES_USER: ${LOVE_POINTS_DB_USER:-puntitos}
+      POSTGRES_PASSWORD: ${LOVE_POINTS_DB_PASSWORD:-puntitos}
+    volumes:
+      - love_points_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${LOVE_POINTS_DB_USER:-puntitos} -d ${LOVE_POINTS_DB_NAME:-puntitos}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    networks: [afwilto]
+
+  # One-shot: applies migrations and exits (not a live service), mirroring
+  # love-points-bank's own standalone compose.
+  love-points-migrate:
+    image: migrate/migrate:v4.17.1
+    volumes:
+      - ../love-points-bank/data-base/migrations:/migrations:ro
+    command:
+      - "-path"
+      - "/migrations"
+      - "-database"
+      - "postgres://${LOVE_POINTS_DB_USER:-puntitos}:${LOVE_POINTS_DB_PASSWORD:-puntitos}@love-points-db:5432/${LOVE_POINTS_DB_NAME:-puntitos}?sslmode=disable"
+      - "up"
+    depends_on:
+      love-points-db:
+        condition: service_healthy
+    restart: "no"
+    networks: [afwilto]
+
+  love-points-mngr:
+    build: ../love-points-bank/backend
+    environment:
+      DATABASE_URL: postgres://${LOVE_POINTS_DB_USER:-puntitos}:${LOVE_POINTS_DB_PASSWORD:-puntitos}@love-points-db:5432/${LOVE_POINTS_DB_NAME:-puntitos}?sslmode=disable
+      HTTP_ADDR: ":8080"
+      CORS_ORIGIN: "http://localhost:3000,http://localhost:3007"
+    ports:
+      - "8083:8080"
+    depends_on:
+      love-points-db:
+        condition: service_healthy
+      love-points-migrate:
+        condition: service_completed_successfully
     restart: unless-stopped
     networks: [afwilto]
