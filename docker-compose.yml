@@ -109,6 +109,16 @@ services:
     restart: unless-stopped
     networks: [afwilto]
 
+  studies:
+    build:
+      context: ./frontend
+      dockerfile: docker/Dockerfile.mfe
+      args: { APP: afwilto-studies-web-ui }
+    ports:
+      - "3008:80"
+    restart: unless-stopped
+    networks: [afwilto]
+
   # ── Backend: stateless subject managers ────────────────────────────────────
   cs-mngr:
     build: ./backend/afwilto-subject-computer-science-mngr

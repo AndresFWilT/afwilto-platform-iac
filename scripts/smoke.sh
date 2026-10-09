@@ -24,7 +24,7 @@ check() {
 echo "── frontends ──"
 check "shell /"                 http://localhost:3000/
 check "shell SPA fallback"      http://localhost:3000/slab/ud/computer-science-1
-for port in 3001 3002 3003 3004 3005 3006 3007; do
+for port in 3001 3002 3003 3004 3005 3006 3007 3008; do
   check "remoteEntry :$port"    "http://localhost:$port/remoteEntry.js"
 done
 
@@ -46,7 +46,7 @@ check "mailhog UI"       http://localhost:8025/ 200
 echo "── static cache policy ──"
 # A missing Cache-Control on the unhashed entry points lets browsers apply
 # heuristic freshness, so a rebuilt MFE never reaches an open tab (Spec 14 §10).
-for port in 3000 3001 3002 3003 3004 3005 3006 3007; do
+for port in 3000 3001 3002 3003 3004 3005 3006 3007 3008; do
   cc=$(curl -sI "http://localhost:$port/" | tr -d '\r' | sed -n 's/^[Cc]ache-[Cc]ontrol: //p')
   if [[ "$cc" == *"no-cache"* || "$cc" == *"no-store"* ]]; then
     echo "OK   :$port index.html revalidates ($cc)"
@@ -55,7 +55,7 @@ for port in 3000 3001 3002 3003 3004 3005 3006 3007; do
     FAILED=1
   fi
 done
-for port in 3001 3002 3003 3004 3005 3006 3007; do
+for port in 3001 3002 3003 3004 3005 3006 3007 3008; do
   cc=$(curl -sI "http://localhost:$port/remoteEntry.js" | tr -d '\r' | sed -n 's/^[Cc]ache-[Cc]ontrol: //p')
   if [[ "$cc" == *"no-cache"* || "$cc" == *"no-store"* ]]; then
     echo "OK   :$port remoteEntry.js revalidates ($cc)"
