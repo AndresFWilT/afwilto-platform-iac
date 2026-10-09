@@ -377,6 +377,7 @@ services:
 
   # ── Backend: love points bank (Go + Postgres) ──────────────────────────────
   # Spec: frontend/docs/specs/15-love-points-bank-mfe.md
+  # Service + migrations: backend/afwilto-love-points-bank-mngr (own repo).
   love-points-db:
     image: postgres:16-alpine
     environment:
@@ -393,12 +394,11 @@ services:
     restart: unless-stopped
     networks: [afwilto]
 
-  # One-shot: applies migrations and exits (not a live service), mirroring
-  # love-points-bank's own standalone compose.
+  # One-shot: applies migrations and exits (not a live service).
   love-points-migrate:
     image: migrate/migrate:v4.17.1
     volumes:
-      - ../love-points-bank/data-base/migrations:/migrations:ro
+      - ./backend/afwilto-love-points-bank-mngr/migrations:/migrations:ro
     command:
       - "-path"
       - "/migrations"
@@ -412,7 +412,7 @@ services:
     networks: [afwilto]
 
   love-points-mngr:
-    build: ../love-points-bank/backend
+    build: ./backend/afwilto-love-points-bank-mngr
     environment:
       DATABASE_URL: postgres://${LOVE_POINTS_DB_USER:-puntitos}:${LOVE_POINTS_DB_PASSWORD:-puntitos}@love-points-db:5432/${LOVE_POINTS_DB_NAME:-puntitos}?sslmode=disable
       HTTP_ADDR: ":8080"
