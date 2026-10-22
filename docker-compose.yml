@@ -119,6 +119,16 @@ services:
     restart: unless-stopped
     networks: [afwilto]
 
+  cidr:
+    build:
+      context: ./frontend
+      dockerfile: docker/Dockerfile.mfe
+      args: { APP: afwilto-cidr-web-ui }
+    ports:
+      - "3009:80"
+    restart: unless-stopped
+    networks: [afwilto]
+
   # ── Backend: stateless subject managers ────────────────────────────────────
   cs-mngr:
     build: ./backend/afwilto-subject-computer-science-mngr
@@ -167,6 +177,24 @@ services:
       QUARKUS_HTTP_PORT: "8080"
     ports:
       - "8091:8080"
+    restart: unless-stopped
+    networks: [afwilto]
+
+  # ── Backend: slab CIDR calculator (Ruby + Sinatra, stateless) ─────────────
+  # Spec: frontend/docs/specs/17-cidr-calculator.md
+  cidr-mngr:
+    build: ./backend/afwilto-slab-cidr-mngr
+    environment:
+      PORT: "8080"
+      ALLOW_ORIGINS: http://localhost:3000,http://localhost:3009
+      MAX_BODY_BYTES: "65536"
+    ports:
+      - "8092:8080"
+    healthcheck:
+      # The slim Ruby image has no curl; Ruby's stdlib does the probe.
+      test: ["CMD", "ruby", "-rnet/http", "-e", "exit(Net::HTTP.get_response(URI('http://127.0.0.1:8080/healthz')).is_a?(Net::HTTPSuccess) ? 0 : 1)"]
+      interval: 10s
+      retries: 6
     restart: unless-stopped
     networks: [afwilto]
 

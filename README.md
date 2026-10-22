@@ -15,11 +15,12 @@ Then open **http://localhost:3000**. Verify with `./scripts/smoke.sh`.
 | Software Lab | http://localhost:3000/slab |
 | UD subjects | http://localhost:3000/slab/ud |
 | MATI | http://localhost:3000/slab/mati |
+| CIDR Calculator | http://localhost:3000/slab/cidr |
 | Finance | http://localhost:3000/finance |
 | Certifications | http://localhost:3000/certifications |
 | MailHog (theater emails) | http://localhost:8025 |
 
-APIs publish on 8080 (finance) and 8081–8091 (subject managers); databases are
+APIs publish on 8080 (finance), 8081–8091 (subject managers) and 8092 (CIDR calculator); databases are
 network-internal only. All env vars have working defaults (`.env.example`).
 
 - Architecture & specs: `frontend/docs/specs/` (start at `00`, deployment at `10`)

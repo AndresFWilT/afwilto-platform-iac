@@ -8,6 +8,7 @@ memory/
 /backend/afwilto-certifications-mngr/
 /backend/afwilto-studies-mngr/
 /backend/afwilto-love-points-bank-mngr/
+/backend/afwilto-slab-cidr-mngr/
 
 # private files, never published (owner decision 2026-10-09)
 /A.md
