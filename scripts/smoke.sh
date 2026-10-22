@@ -24,7 +24,7 @@ check() {
 echo "── frontends ──"
 check "shell /"                 http://localhost:3000/
 check "shell SPA fallback"      http://localhost:3000/slab/ud/computer-science-1
-for port in 3001 3002 3003 3004 3005 3006 3007 3008; do
+for port in 3001 3002 3003 3004 3005 3006 3007 3008 3009; do
   check "remoteEntry :$port"    "http://localhost:$port/remoteEntry.js"
 done
 
@@ -41,12 +41,13 @@ check "finance-api"      http://localhost:8080/ any
 check "certifications"   http://localhost:8082/healthz 200
 check "love-points-mngr" http://localhost:8083/healthz 200
 check "studies-mngr"     http://localhost:8084/healthz 200
+check "cidr-mngr"        http://localhost:8092/healthz 200
 check "mailhog UI"       http://localhost:8025/ 200
 
 echo "── static cache policy ──"
 # A missing Cache-Control on the unhashed entry points lets browsers apply
 # heuristic freshness, so a rebuilt MFE never reaches an open tab (Spec 14 §10).
-for port in 3000 3001 3002 3003 3004 3005 3006 3007 3008; do
+for port in 3000 3001 3002 3003 3004 3005 3006 3007 3008 3009; do
   cc=$(curl -sI "http://localhost:$port/" | tr -d '\r' | sed -n 's/^[Cc]ache-[Cc]ontrol: //p')
   if [[ "$cc" == *"no-cache"* || "$cc" == *"no-store"* ]]; then
     echo "OK   :$port index.html revalidates ($cc)"
@@ -55,7 +56,7 @@ for port in 3000 3001 3002 3003 3004 3005 3006 3007 3008; do
     FAILED=1
   fi
 done
-for port in 3001 3002 3003 3004 3005 3006 3007 3008; do
+for port in 3001 3002 3003 3004 3005 3006 3007 3008 3009; do
   cc=$(curl -sI "http://localhost:$port/remoteEntry.js" | tr -d '\r' | sed -n 's/^[Cc]ache-[Cc]ontrol: //p')
   if [[ "$cc" == *"no-cache"* || "$cc" == *"no-store"* ]]; then
     echo "OK   :$port remoteEntry.js revalidates ($cc)"
@@ -88,6 +89,26 @@ if [[ -n "$cert_id" ]]; then
   fi
 else
   echo "FAIL certifications round-trip (create returned no id)"
+  FAILED=1
+fi
+
+# CIDR calculator (spec 17 AC-P1): a backend calculation, reachable from the shell origin.
+range_body=$(curl -s -X POST http://localhost:8092/api/v1/cidr/range \
+  -H 'Content-Type: application/json' -H 'Origin: http://localhost:3000' \
+  -D /tmp/cidr-smoke-headers -d '{"cidr":"10.0.0.0/24"}')
+if [[ "$range_body" == *'"totalHosts":"256"'* ]] && grep -qi '^access-control-allow-origin: http://localhost:3000' /tmp/cidr-smoke-headers; then
+  echo "OK   cidr-mngr calculates 10.0.0.0/24 and allows the shell origin"
+else
+  echo "FAIL cidr-mngr range round-trip (body=${range_body:0:120})"
+  FAILED=1
+fi
+rm -f /tmp/cidr-smoke-headers
+
+# Studies seed (spec 17 FR-10): the CIDR note is reachable through its tag.
+if curl -s "http://localhost:8084/api/v1/notes?tag=cidr" | grep -q 'IPv4 and IPv6 CIDR'; then
+  echo "OK   studies seed: CIDR note tagged 'cidr'"
+else
+  echo "FAIL studies seed: no note tagged 'cidr'"
   FAILED=1
 fi
 
