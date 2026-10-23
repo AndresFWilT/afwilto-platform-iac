@@ -18,6 +18,7 @@ volumes:
   certifications_pgdata:
   certifications_uploads:
   studies_pgdata:
+  studies_media:
   love_points_pgdata:
   # Reuses the volume created by the old standalone finance stack so existing
   # personal-finance data carries over into the platform.
@@ -350,9 +351,13 @@ services:
       DATABASE_URL: postgres://${STUDIES_DB_USER:-studies}:${STUDIES_DB_PASSWORD:-studies}@studies-db:5432/studies?sslmode=disable
       MAX_BODY_BYTES: "1048576"
       MIGRATE_ON_START: "true"
+      MEDIA_DIR: /data/media
       ALLOW_ORIGINS: http://localhost:3000,http://localhost:3008
     ports:
       - "8084:8084"
+    volumes:
+      # Exam question images, content-addressed (spec 18 slice 05).
+      - studies_media:/data/media
     depends_on:
       studies-db:
         condition: service_healthy
