@@ -112,4 +112,30 @@ else
   FAILED=1
 fi
 
+# Exam media (spec 18 slice 05): studies-mngr keeps question images in the
+# studies_media volume, mounted at /data/media (MEDIA_DIR). /readyz also needs
+# that directory to be writable, and an unknown hash is a JSON 404.
+studies_container=$(docker ps -q \
+  --filter label=com.docker.compose.project=afwilto-platform \
+  --filter label=com.docker.compose.service=studies-mngr 2>/dev/null | head -1)
+if [[ -z "$studies_container" ]]; then
+  echo "FAIL studies-mngr media volume (container not found)"
+  FAILED=1
+elif docker inspect "$studies_container" \
+  --format '{{range .Mounts}}{{.Name}}:{{.Destination}} {{end}}' | grep -q 'studies_media:/data/media'; then
+  echo "OK   studies-mngr mounts studies_media at /data/media"
+else
+  echo "FAIL studies-mngr does not mount studies_media at /data/media"
+  FAILED=1
+fi
+check "studies-mngr ready (db + writable MEDIA_DIR)" http://localhost:8084/readyz 200
+media_code=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:8084/api/v1/media/$(printf '0%.0s' {1..64})")
+media_type=$(curl -sI "http://localhost:8084/api/v1/media/xyz" | tr -d '\r' | sed -n 's/^[Cc]ontent-[Tt]ype: //p')
+if [[ "$media_code" == "404" && "$media_type" == application/json* ]]; then
+  echo "OK   studies-mngr media route: an unknown hash is a JSON 404"
+else
+  echo "FAIL studies-mngr media route (unknown hash → $media_code, '$media_type')"
+  FAILED=1
+fi
+
 exit $FAILED
